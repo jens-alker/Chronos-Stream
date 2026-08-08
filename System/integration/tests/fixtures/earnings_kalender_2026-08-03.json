@@ -1,0 +1,85 @@
+{
+ "type": "Earnings",
+ "description": "Historical and upcoming Earnings",
+ "from": "2026-08-03",
+ "to": "2026-08-04",
+ "earnings": [
+  {
+   "code": "EMKAY.BSE",
+   "report_date": "2026-08-03",
+   "date": "2026-06-30",
+   "before_after_market": "BeforeMarket",
+   "currency": null,
+   "actual": 3.07,
+   "estimate": null,
+   "difference": 0,
+   "percent": null
+  },
+  {
+   "code": "MAYURUNIQ.BSE",
+   "report_date": "2026-08-03",
+   "date": "2026-06-30",
+   "before_after_market": "BeforeMarket",
+   "currency": null,
+   "actual": null,
+   "estimate": null,
+   "difference": 0,
+   "percent": null
+  },
+  {
+   "code": "RAMRAT.BSE",
+   "report_date": "2026-08-03",
+   "date": "2026-06-30",
+   "before_after_market": "BeforeMarket",
+   "currency": null,
+   "actual": 3.7722,
+   "estimate": null,
+   "difference": 0,
+   "percent": null
+  },
+  {
+   "code": "MCLOUD.BSE",
+   "report_date": "2026-08-03",
+   "date": "2026-06-30",
+   "before_after_market": "BeforeMarket",
+   "currency": null,
+   "actual": null,
+   "estimate": null,
+   "difference": 0,
+   "percent": null
+  },
+  {
+   "code": "SNIRF.US",
+   "report_date": "2026-08-03",
+   "date": "2026-06-30",
+   "before_after_market": "AfterMarket",
+   "currency": null,
+   "actual": null,
+   "estimate": null,
+   "difference": 0,
+   "percent": null
+  },
+  {
+   "code": "CKNHF.US",
+   "report_date": "2026-08-03",
+   "date": "2026-06-30",
+   "before_after_market": "AfterMarket",
+   "currency": null,
+   "actual": null,
+   "estimate": null,
+   "difference": 0,
+   "percent": null
+  },
+  {
+   "code": "SFRGF.US",
+   "report_date": "2026-08-03",
+   "date": "2026-06-30",
+   "before_after_market": "AfterMarket",
+   "currency": null,
+   "actual": null,
+   "estimate": null,
+   "difference": 0,
+   "percent": null
+  }
+ ]
+}

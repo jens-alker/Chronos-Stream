@@ -1,0 +1,41 @@
+# API-Keys + lokale Konfiguration — NIE versionieren
+*.key
+API Keys/
+System/API Keys/
+System/Config/config.txt
+config.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# Datenbanken (Test-/Echt-DB gehören nicht ins Repo)
+*.db
+*.db-wal
+*.db-shm
+
+# Laufzeit-Caches / Logs
+.cache_*.json
+.watchdog*.log
+.batch.log
+.backfill.log
+
+# Voll-Dump-/EOD-Caches: separate lokale Ablage, nicht ins Repo
+System/connectors/fundamentals_cache/
+System/connectors/eod_cache/
+
+# Laufzeit-Gedächtnis / Embedding-Cache (machine-lokal)
+System/harness/quota_gedaechtnis.json
+embed_cache.json
+
+# Betriebs-/Forward-Laufzeit-Stores (lokal)
+betrieb.db
+cockpit.db
+forward.db
+scraper.db.*
+*.tmp
+tmp/
+
+# Scraper-Resilienz-Laufzeitdateien (lokal)
+scraper.stop
+watchdog.log
