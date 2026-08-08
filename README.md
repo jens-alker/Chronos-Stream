@@ -84,7 +84,7 @@ The dashed **analysis layer** consumes this repository's data but is not part of
 ends exactly at the boundary between **data** and **valuation**.
 
 Detailed diagrams (layered model, bitemporal PIT data flow, monitoring state machine) are in
-**[`docs/ARCHITEKTUR.md`](docs/ARCHITEKTUR.md)**.
+**[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**.
 
 ---
 
