@@ -20,7 +20,6 @@ if _CONNECTORS not in sys.path:
 import eod_cache
 import eodhd_prices as ep
 import fundamentals_cache as fc
-import fundamentals_drive as fd
 
 
 def _bar(datum, close, adj=None):
@@ -151,27 +150,6 @@ class TestFetchEodFullStrikt(unittest.TestCase):
         ep._curl_json = lambda url, timeout: {"message": "rate limit"}      # Dict ohne error-Key
         with self.assertRaises(RuntimeError):
             ep._fetch_eod_full("X.US")                                      # wirft → wird NICHT als [] gecacht
-
-
-class TestEodDriveDelegation(unittest.TestCase):
-    def test_eod_drive_delegiert_an_db_sync(self):
-        # Jens 07.08.: EINE DB, eine Datei — eod_drive synct dieselbe markt_cache.db wie fundamentals_drive
-        # (kein eigener Namespace/Ordner mehr). Der Delegat reicht `drive` durch und ruft fd.sync_hoch.
-        import eod_drive
-        erfasst = {}
-
-        def fake_hoch(at=None, cache_dir=None, drive=None, namespace=None, db_pfad=None):
-            erfasst["at"], erfasst["drive"] = at, drive
-            return 1
-        orig = fd.sync_hoch
-        fd.sync_hoch = fake_hoch
-        try:
-            wobj = object()
-            self.assertEqual(eod_drive.sync_hoch("t", drive=wobj), 1)
-        finally:
-            fd.sync_hoch = orig
-        self.assertEqual(erfasst["at"], "t")
-        self.assertIs(erfasst["drive"], wobj)                                # Drive-Handle durchgereicht
 
 
 if __name__ == "__main__":

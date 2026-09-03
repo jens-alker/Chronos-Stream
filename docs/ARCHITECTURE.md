@@ -1,197 +1,149 @@
-# Architecture — Chronos-Stream Data Infrastructure
+# Architecture — Chronos-Stream
 
-This document describes the architecture of the open data infrastructure in diagrams. All diagrams
-are written in [Mermaid](https://mermaid.js.org/) and render directly on GitHub.
-
-The design follows four core principles:
-
-1. **Separation of acquisition and computation** — the compute/analysis path never fetches live; it
-   works exclusively on pre-stored data (cache-first). Live fetching is solely the job of the
-   asynchronous data-maintenance layer.
-2. **Point-in-time (PIT) / bitemporal** — every row separately carries "when it happened", "when it
-   was disclosed", and "when we knew it". Retrospective evaluations can therefore never use future
-   knowledge (no look-ahead).
-3. **Lossless & redundancy-free** — every document is stored exactly once (dedup), nothing is deleted
-   destructively, and data fetched once is not fetched again (cache).
-4. **"Silence ≠ green"** — operations are actively measured by an independent process; the absence of
-   errors does not count as proof of correct operation.
+How the point-in-time guarantee is actually enforced, in diagrams. All diagrams are Mermaid and
+render directly on GitHub.
 
 ---
 
 ## 1. Layered model
 
+Four layers, one direction. Nothing below reaches upward, and the analysis layer that consumes
+this data is outside the repository entirely.
+
 ```mermaid
 flowchart TB
-  subgraph L0[External data sources]
-    src[arXiv · EDGAR · EPO · EODHD · FRED · Treasury]
+  subgraph Q[Public sources]
+    direction LR
+    arxiv[arXiv] ~~~ edgar[SEC EDGAR] ~~~ epo[EPO OPS]
+    fred[FRED/ALFRED] ~~~ treas[US Treasury] ~~~ eodhd[EODHD]
   end
 
-  subgraph L1[Ingestion layer]
-    conn[Connectors<br/>fetch + verified transformation]
-    scr[Collector / scraper<br/>quality cascade · multi-threaded]
-    dd[Dedup core<br/>semantic similarity · non-destructive]
-    rec[Recording layer<br/>lossless · pinned extractor version]
+  subgraph C[Connectors — fetch and transform]
+    direction LR
+    trans["transformation core<br/>(pure, offline-tested)"]
+    fetch["live fetch<br/>(keys from env)"]
   end
 
-  subgraph L2[Data storage layer]
-    doc[(scraper.db<br/>documents + facts)]
-    mkt[(markt.db<br/>prices + fundamentals)]
-    ch[gzip cache<br/>full dumps]
-    dr[(Google Drive DB<br/>versioned)]
+  subgraph S[Storage — bitemporal, append-only]
+    direction LR
+    sdb[("sammler_db<br/>documents + facts")]
+    mdb[("markt_db<br/>prices + fundamentals")]
+    rec[("aufzeichnung<br/>lossless record")]
   end
 
-  subgraph L3[Orchestration layer]
-    run[Runner<br/>topological sort · fail-closed]
-    ctr[Contract validation]
-    llm[LLM ensemble router<br/>failover · provider-agnostic]
+  subgraph I[Integrity core]
+    direction LR
+    con["contracts.py<br/>contract validator"]
+    run["runner.py<br/>fail-closed pipeline"]
+    sto["store.py<br/>append-only"]
   end
 
-  subgraph L4[Operations layer — Layer S]
-    mon[Process watchdog<br/>liveness · stagnation · freshness · quota]
-    ops[(Ops DB<br/>physically separate)]
-  end
+  Q --> C --> S
+  I -. validates every write .-> S
 
-  L0 --> conn
-  conn --> scr --> dd --> rec
-  rec --> doc
-  conn --> ch --> mkt
-  ch <--> dr
-  run --- L1
-  ctr --- L1
-  llm --- scr
-  mon -.measures.-> L1
-  mon -.measures.-> L2
-  mon --> ops
+  ana[/"Analysis and valuation<br/>(proprietary — NOT in this repo)"/]
+  S --> ana
 
-  ana[/"Analysis layer — proprietary, separate repository"/]
-  doc --> ana
-  mkt --> ana
-  style ana stroke-dasharray:6 4,fill:#f6f6f6,color:#555
+  style ana stroke-dasharray:6 4,fill:#f6f6f6,color:#666
 ```
 
-Layers L0–L4 make up this repository. The **analysis layer** (dashed) is the consumer of the data and
-is deliberately not included.
+The split inside every connector is deliberate: the **transformation** from raw payload to
+structured rows is a pure function and is tested offline against recorded payloads; the **live
+fetch** is a thin shell around it. Correctness is therefore checkable without network or keys.
 
 ---
 
-## 2. Bitemporal point-in-time data flow
+## 2. The four temporal roles
 
-Every datum carries three time axes. Only what was *knowable* as of the observation date may enter a
-retrospective evaluation — the filter is fail-closed.
+The heart of the design. A record is not one point in time but four, and every collapse of two
+of them is a way for future knowledge to leak backwards.
+
+```mermaid
+timeline
+  title One fact, four timestamps
+  t_event       : the thing happened
+  t_disclosed   : it was published — and again on every revision
+  t_ingest      : this system learned of it
+  t_ref         : the period the value describes
+```
+
+An as-of query at time `T` admits a row only if `t_disclosed <= T` **and** `t_ingest <= T`. The
+second condition is the one usually forgotten: a value may have been public before this system
+could have known it, and using it anyway is look-ahead through the back door.
 
 ```mermaid
 flowchart LR
-  ev["t_event<br/>(event occurred)"] --> di["t_disclosed<br/>(publicly disclosed)"]
-  di --> in["t_ingest<br/>(captured by the system)"]
-
-  subgraph Filter["PIT filter at observation date t0"]
-    direction TB
-    q{"t_disclosed ≤ t0<br/>AND t_ingest ≤ t0 ?"}
-  end
-
-  in --> q
-  q -->|yes| ok["visible as of the date<br/>→ admissible for evaluation"]
-  q -->|no| no["not visible<br/>→ excluded (no look-ahead)"]
-
-  style ok fill:#e7f5e7,color:#1a1a1a
-  style no fill:#fbeaea,color:#1a1a1a
+  q["as-of query at T"] --> f{"t_disclosed ≤ T<br/>AND t_ingest ≤ T?"}
+  f -->|yes| ok["row is visible"]
+  f -->|no| skip["row does not exist yet<br/>at time T"]
 ```
 
-Example disclosure latency by source type (`t_disclosed − t_event`, in days), as anchored in the
-recording layer:
-
-| Source type | Latency | Reason |
-|---|---|---|
-| Publication | 2 | immediately public, only crawl latency |
-| Patent | 3 | publication = filing + ~18 months; indexing |
-| Funding filing | 2 | disclosure date = filing date; index latency |
-| Macro series | 0 | the vintage timestamp IS the availability |
-
----
-
-## 3. Ingestion sequence
+### Restatement is an append, never an edit
 
 ```mermaid
-sequenceDiagram
-  participant Q as Data source
-  participant K as Connector
-  participant S as Collector
-  participant D as Dedup core
-  participant DB as scraper.db
-  participant A as Recording
-
-  S->>K: fetch(window, PIT boundary)
-  K->>Q: HTTP fetch (fail-closed)
-  Q-->>K: raw payload
-  K->>K: verified transformation → structured
-  K-->>S: documents (dated)
-  S->>D: check candidate
-  D->>DB: nearest neighbors (embedding, time window)
-  alt near-duplicate
-    D-->>S: mark as duplicate (do not delete)
-  else new
-    D-->>S: canonical
-    S->>DB: store
-  end
-  S->>A: record document + attributes (including rejected)
-  Note over A: lossless · pinned extractor version
+flowchart TB
+  v1["GDP Q1 = 2.1%<br/>t_disclosed 2026-04-30"]
+  v2["GDP Q1 = 1.8%<br/>t_disclosed 2026-05-28<br/>(revision)"]
+  v1 --> v2
+  v1 -.->|"as-of 2026-05-01<br/>still answers 2.1%"| a1[" "]
+  v2 -.->|"as-of 2026-06-01<br/>answers 1.8%"| a2[" "]
+  style a1 fill:none,stroke:none
+  style a2 fill:none,stroke:none
 ```
 
-Deduplication is **semantic** (embedding similarity rather than byte equality),
-**non-destructive** (marking via `dup_of`, never deletion), and **source-type-aware** (a patent is
-never marked as a duplicate of the paper it builds on).
+If the revision overwrote its predecessor, the first answer would be unreachable — and a
+backtest run today would quietly use a number nobody had in May.
 
 ---
 
-## 4. Operations monitoring — state machine ("silence ≠ green")
+## 3. Fail-closed validation
 
-An independent watchdog process evaluates operations from the outside. Alerts pass through a
-debounced state machine with human acknowledgement.
+Every step's output is validated against its table contract **before** it is stored. A violation
+aborts the pipeline; it does not log a warning and continue.
 
 ```mermaid
-stateDiagram-v2
-  [*] --> Green
-  Green --> Yellow: early indicator<br/>(stagnation/latency)
-  Yellow --> Green: recovered
-  Yellow --> Red: threshold exceeded
-  Green --> Red: hard failure<br/>(liveness/contract)
-  Red --> Acknowledged: human confirms
-  Acknowledged --> Green: resolved
-  Red --> Green: automatic recovery
-
-  note right of Red
-    fail-closed:
-    uncertainty → Red,
-    never silently Green
-  end note
+flowchart TB
+  step["step produces rows"] --> val{"contract satisfied?"}
+  val -->|yes| app["append to store"] --> next["next step"]
+  val -->|no| stop(["ContractError —<br/>pipeline aborts,<br/>nothing is stored"])
+  style stop fill:#fdd,stroke:#c00,color:#900
 ```
 
-The watchdog runs as a **separate process** and writes into a **physically separate ops database** —
-so the diagnosis stays readable even if a monitored store fails. A dead-man's switch monitors the
-watchdog itself.
+The order matters and is tested: validation precedes the append, so an aborted run leaves no
+partial rows for a later consumer to find. What the validator enforces:
+
+| Rule | Why it exists |
+|---|---|
+| The temporal roles required by the table type are present and non-empty | Without them a cutoff cannot be evaluated at all |
+| A contract that omits a required role is itself rejected | Otherwise every row passes while nothing is checked |
+| Judged fields stay ordinal, measured fields stay numeric | A judgement dressed as a decimal invites arithmetic that means nothing |
+| A category id never appears without its version | An unversioned id silently pins to "latest" — look-ahead in disguise |
+| Non-nullable fields must be present and non-empty | Otherwise "contract-valid" is not a completeness statement |
+| An unknown table type stops validation | Fail-closed: unrecognised must not mean unconstrained |
 
 ---
 
-## 5. Cache-first acquisition & versioned archiving
+## 4. Lossless recording and its conservation law
 
-Data fetched once is cached locally and periodically offloaded to a versioned, authoritative Google
-Drive database (byte-exact, verified round-trip).
+Rejected documents are recorded too. The set of everything seen is the denominator of any later
+statement about what was filtered out; keeping only the accepted ones destroys it irrecoverably.
 
 ```mermaid
 flowchart LR
-  need[data need<br/>symbol/series] --> hit{in cache?}
-  hit -->|yes| ret[serve from cache<br/>0 API units]
-  hit -->|no| fetch[single full fetch]
-  fetch --> store[write gzip cache]
-  store --> ret
-  store -.periodic sync.-> drive[(Google Drive DB<br/>incremental · versioned)]
-  drive -.restore before run.-> store
-
-  style ret fill:#e7f5e7,color:#1a1a1a
+  found["documents found<br/>by a run"] --> dec{"relevance ≥ threshold?"}
+  dec -->|yes| acc["stored, angenommen = 1"]
+  dec -->|no| rej["stored, angenommen = 0"]
+  acc --> law
+  rej --> law
+  law{{"pruefe_lauf:<br/>n_gefunden == #decisions<br/>n_neu == #raw documents"}}
+  law -->|holds| ok["run accepted"]
+  law -->|differs| err(["AufzeichnungFehler —<br/>fail loud"])
+  style err fill:#fdd,stroke:#c00,color:#900
 ```
 
-The sync is **incremental** (only changed buckets), **loss-safe** (read-back verification before old
-versions are cleaned up), and **redundancy-free** (one canonical state per bucket).
+The two sides of the comparison come from **different sources** — what the run reported versus
+what was actually written. An identity computed from a single source could never break, and
+would be decoration rather than a check.
 
 ---
 
@@ -199,11 +151,39 @@ versions are cleaned up), and **redundancy-free** (one canonical state per bucke
 
 ```
 System/
-├── connectors/     data-source adapters (fetch + transformation) + cache/Drive sync
-├── harness/        runner, contract validation, store, LLM ensemble router
-├── integration/    data maintenance, backfill, market-DB construction, taxonomy, EOD scheduler
-├── tests/          operations / recording / collector tests
-├── scraper.py      collector (ingestion core)
-├── aufzeichnung.py lossless recording layer
-└── betrieb_*.py    process-independent monitoring (Layer S)
+  harness/
+    contracts.py            contract validator — the invariants, machine-enforced
+    runner.py               fail-closed pipeline with dependency ordering
+    store.py                append-only store (in-memory and SQLite)
+    tests/                  test_contracts · test_runner · test_store
+  aufzeichnung.py           lossless recording + the conservation law
+  connectors/
+    arxiv_fetch.py          preprints
+    edgar_form_d.py         SEC Form D — funding rounds
+    edgar_segment.py        SEC segment reporting
+    epo_ops.py              European patents (OAuth2)
+    fred_series.py          macro series, vintage-aware
+    treasury_rates.py       risk-free yield curve
+    eodhd_prices.py         prices and fundamentals
+    sammler_db.py           document/fact schema, bitemporal
+    markt_db.py             market data schema, bitemporal
+    eod_cache.py            fetch-once caches
+    fundamentals_cache.py
+    dedup_kern.py           one canonical semantic dedup definition
+    hf_embedding.py         embeddings for that definition
+    tests/
+  integration/
+    epo_abstract_backfill.py
+    tests/
+  tests/                    test_aufzeichnung
+docs/
+  ARCHITECTURE.md           this file
+```
+
+Run the whole suite offline, without keys:
+
+```bash
+for t in $(find System -name 'test_*.py' | sort); do
+  (cd "$(dirname "$t")" && python3 "$(basename "$t")") || echo "FAILED: $t"
+done
 ```

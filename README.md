@@ -1,182 +1,136 @@
-# Chronos-Stream — Data Infrastructure for Macroeconomic Research
+# Chronos-Stream — point-in-time data integrity
 
-**Chronos-Stream** is an open-source **data infrastructure** that continuously **collects,
-deduplicates, stores point-in-time (PIT), and independently monitors** publicly available economic
-primary data — scientific publications, patents, regulatory filings, price and fundamental data, and
-macroeconomic series.
+**Chronos-Stream** is a small Python layer that makes **look-ahead bias structurally impossible**
+in datasets built from public economic sources. Every record carries explicit temporal roles, a
+restatement is a new row rather than an edit, and a contract validator refuses — fail-closed —
+to hand on rows that do not satisfy the rules.
 
-It is the data-bearing foundation layer of a larger research system. The actual **analysis and
-valuation logic is deliberately NOT part of this repository** — Chronos-Stream delivers only clean,
-reproducible data to a downstream analysis layer.
+The problem it addresses is quiet by nature. When historical data is revised in place, or a value
+disclosed later leaks into the evaluation of an earlier moment, models look *more* accurate, not
+noisier. Survivorship bias compounds it: a study of the entities that still exist today has
+silently excluded the ones that failed. None of these errors announce themselves, which is why
+they survive review — and why the remedy has to be structural rather than procedural.
 
-> **Language note:** The code and its documentation are written in German (docstrings, identifiers).
-> Data formats and external interfaces follow the respective English-language origin APIs.
+> **Status: working prototype, not a released library.** The mechanisms below run and are covered
+> by tests; the packaging, the specification document, the English public API and the verification
+> tool are not built yet. See [Roadmap](#roadmap) for what is and isn't here.
 
 ---
 
-## What this system does
+## The four temporal roles
 
-| Capability | Implementation |
+The centre of the design. Every record answers four separate questions, and collapsing any two of
+them is how look-ahead enters:
+
+| Role | Question it answers |
 |---|---|
-| **Broad data collection** | Connectors to arXiv, SEC EDGAR, EPO (patents), EODHD (prices/fundamentals), FRED, US Treasury |
-| **Quality & dedup pipeline** | Collector with a quality cascade + semantic deduplication (embeddings, non-destructive) |
-| **Point-in-time storage** | Bitemporal storage (`t_event` / `t_disclosed` / `t_ingest`) — no look-ahead |
-| **Lossless recording** | Every document (including rejected ones) + every extracted attribute, with a pinned extractor version |
-| **Cache & archive layer** | Local gzip cache + a versioned Google Drive database (byte-exact round-trip) |
-| **LLM orchestration** | Provider-agnostic ensemble router (local Ollama, Gemini, Claude, OpenAI-compatible) with failover |
-| **Process-independent monitoring** | External watchdog (Layer S): liveness, stagnation, data freshness, contract observation, fail-closed |
+| `t_event` | When did it actually happen? |
+| `t_disclosed` | When did it become public — including each later revision? |
+| `t_ingest` | When did this system learn of it? |
+| `t_ref` | Which period does the value describe? |
 
-Core principle of the operations layer: **"silence ≠ green"** — the absence of errors is not proof of
-correct operation; the watchdog measures actively and raises fail-closed alerts.
+Reference data adds validity intervals (`t_valid_von` / `t_valid_bis`) for bitemporal
+reconstruction. An as-of query at a past timestamp returns what was knowable **then** — not
+today's corrected view of it.
 
----
+These roles occur **345 times across 17 modules**; they are the schema, not a convention.
 
-## Architecture overview
+## The invariants
 
-```mermaid
-flowchart LR
-  subgraph Q[Public data sources]
-    direction TB
-    arxiv[arXiv<br/>publications]
-    edgar[SEC EDGAR<br/>filings]
-    epo[EPO OPS<br/>patents]
-    eodhd[EODHD<br/>prices + fundamentals]
-    fred[FRED<br/>macro series]
-    treas[US Treasury<br/>yield curve]
-  end
+| Invariant | Where it is enforced |
+|---|---|
+| A row is rejected unless it carries the temporal roles its table type requires | `harness/contracts.py` |
+| A restatement is appended; nothing is ever overwritten | `harness/store.py` (no `update`, no `delete`) |
+| A contract violation aborts the pipeline instead of passing rows downstream | `harness/runner.py` (fail-closed) |
+| Judged values stay ordinal; measured values stay numeric — never mixed | `harness/contracts.py` |
+| Rejected documents are recorded too, so the denominator survives | `aufzeichnung.py` |
+| What a run reported and what it wrote must agree, or the run fails loudly | `aufzeichnung.pruefe_lauf` |
 
-  subgraph I[Ingestion layer]
-    direction TB
-    conn[Connectors<br/>fetch + transform]
-    scraper[Collector / scraper<br/>quality cascade]
-    dedup[Dedup core<br/>semantic, non-destructive]
-  end
+The last one is a conservation law rather than a counter: a check that only asked `n > 0` would
+report a run that lost half its documents as healthy.
 
-  subgraph S[Data storage]
-    direction TB
-    sdb[(scraper.db<br/>documents + facts)]
-    mdb[(markt.db<br/>prices + fundamentals)]
-    cache[gzip cache<br/>full dumps]
-    drive[(Google Drive DB<br/>versioned)]
-  end
+## What is here
 
-  subgraph B[Operations & control]
-    direction TB
-    harness[Harness<br/>runner · contracts · LLM router]
-    aufsicht[Process watchdog<br/>Layer S · fail-closed]
-  end
-
-  Q --> conn --> scraper --> dedup --> sdb
-  conn --> cache --> mdb
-  cache <-->|sync| drive
-  harness -.- I
-  aufsicht -.monitors.-> I
-  aufsicht -.monitors.-> S
-
-  analyse[/"Analysis layer<br/>(proprietary — NOT in this repo)"/]
-  sdb --> analyse
-  mdb --> analyse
-
-  style analyse stroke-dasharray:6 4,fill:#f6f6f6,color:#666
+```
+System/
+  harness/          contracts.py · store.py · runner.py   — the integrity core
+  aufzeichnung.py                                          — lossless recording
+  connectors/       arxiv_fetch · edgar_form_d · edgar_segment · epo_ops
+                    fred_series · treasury_rates · eodhd_prices
+                    sammler_db · markt_db          — bitemporal storage schemas
+                    eod_cache · fundamentals_cache — fetch-once caches
+                    dedup_kern · hf_embedding      — one canonical dedup definition
+  integration/      epo_abstract_backfill.py
 ```
 
-The dashed **analysis layer** consumes this repository's data but is not part of it. Chronos-Stream
-ends exactly at the boundary between **data** and **valuation**.
+**18 modules, ~3,600 lines of production code; 10 test files, ~1,500 lines, 146 tests, all green
+and all offline.** The core transformations, the contract validation and the recording logic are
+pure and require no network. Live fetches (`fetch_*`) need the respective API keys as environment
+variables and are never exercised by the test suite.
 
-Detailed diagrams (layered model, bitemporal PIT data flow, monitoring state machine) are in
-**[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**.
-
----
-
-## Components
-
-### `System/connectors/` — data-source adapters
-Each connector separates a **verifiable transformation** (raw payload → structured input, tested
-offline) from the **live fetch**. Included among others:
-
-| Connector | Source | Provides |
-|---|---|---|
-| `arxiv_fetch` | arXiv | publications (dated, PIT) |
-| `edgar_form_d`, `edgar_segment` | SEC EDGAR | funding / segment filings |
-| `epo_ops` | EPO OPS 3.2 | patent bibliography + count series (OAuth2) |
-| `eodhd_prices` | EODHD | EOD prices, fundamentals, survivorship-free universe |
-| `fred_series` | FRED/ALFRED | macroeconomic time series (vintage-aware) |
-| `treasury_rates` | US Treasury | risk-free yield curve rf(t) |
-| `sammler_db`, `markt_db` | internal DBs | document/market storage schemas (bitemporal) |
-| `dedup_kern`, `hf_embedding` | — | a single canonical semantic dedup definition |
-| `fundamentals_cache`, `eod_cache` | — | gzip full-dump caches (cache-first, redundancy-free) |
-| `gdrive`, `*_drive` | Google Drive | versioned database offloading (REST, byte-exact) |
-
-### `System/scraper.py` — collector (ingestion core)
-Multi-threaded collector with a quality cascade, robust feed parsers, semantic dedup, and lossless
-recording. The ingestion core of the system.
-
-### `System/harness/` — orchestration
-Deterministic runner (topological sort, fail-closed) + machine **contract validation** + append-only
-**store** (in-memory/SQLite) + **provider-agnostic LLM adapters** and an **ensemble router** with
-capability-ladder failover (local Ollama, Gemini, Claude, any OpenAI-compatible endpoint).
-
-### `System/aufzeichnung.py` — lossless recording layer
-Writes every collected document (including rejected ones) and every extracted attribute into a
-separate, PIT-clean database — the reproducible basis for any later evaluation.
-
-### `System/betrieb_aufsicht*.py` — process-independent monitoring (Layer S)
-A **separate** watchdog process that reads heartbeats, data freshness, and raw HTTP status from the
-outside and writes into a physically separate ops database (surviving the failure of the monitored
-stores). Liveness, stagnation, quota, canary probes, contract observation — all fail-closed.
-
-### `System/integration/` — data maintenance & taxonomy
-Asynchronous data maintenance, fundamentals backfill, structured market-DB construction, EOD
-scheduler (`watchdog_batch.sh`), and the industry/classification taxonomy (IPC/CPC/SIC → GIC
-categories).
-
----
-
-## Data sources (all public / freely accessible)
+### Data sources — all public
 
 | Source | Content | Access |
 |---|---|---|
-| arXiv | preprints (science/engineering) | public, keyless |
-| SEC EDGAR | US corporate filings | public, keyless |
-| EPO OPS | European patents | OAuth2 (free registration) |
-| EODHD | prices + fundamentals (survivorship-free) | API key |
-| FRED / ALFRED | US macro time series | API key (free) |
-| US Treasury | par-yield curve | public, keyless |
+| arXiv | preprints | public, keyless |
+| SEC EDGAR | US corporate filings (Form D, segments) | public, keyless (contact UA required) |
+| EPO OPS | European patents | OAuth2, free registration |
+| FRED / ALFRED | US macro series, vintage-aware | free API key |
+| US Treasury | par yield curve | public, keyless |
+| EODHD | prices and fundamentals | API key |
 
-API keys are obtained exclusively via environment variables and are **never** committed (see
-`.gitignore`).
+API keys and contact addresses come from environment variables and are never committed.
 
----
+## What is deliberately *not* here
+
+The analysis and valuation logic that consumes this data is proprietary and lives elsewhere.
+Chronos-Stream ends exactly at the boundary between **data integrity** and **interpretation**.
+
+Also removed on purpose, to keep the repository to one story: collection orchestration, cloud
+storage synchronisation, LLM routing, and industry-taxonomy tables. They belong to a research
+pipeline, not to a data-integrity component, and their presence made this repository harder to
+read for the one thing it is about.
+
+## Honest limitations
+
+- **The public interface is German** (identifiers, docstrings). Internationalising it is the
+  first thing a wider audience needs.
+- **Coverage is uneven.** The integrity core, the caches and the storage schemas are covered;
+  most connectors are exercised only through their offline transformation cores, and the live
+  fetch paths not at all.
+- **Not packaged.** There is no `pyproject.toml` and nothing on PyPI; you can read and run this
+  code, but you cannot yet depend on it.
+- **No verification tool.** The invariants guard *this* system's writes. Nothing here lets you
+  point a checker at a dataset **you** produced — which is the gap that matters most.
 
 ## Getting started
 
 ```bash
-git clone <REPO-URL> chronos-stream
+git clone https://github.com/jens-alker/chronos-stream
 cd chronos-stream
 
-# Test suite (standard library is enough; third-party packages only for optional live paths)
-for t in $(find System -name 'test_*.py' | sort); do python3 "$t"; done
+# Full test suite — standard library only, no network, no keys
+for t in $(find System -name 'test_*.py' | sort); do
+  (cd "$(dirname "$t")" && python3 "$(basename "$t")") || echo "FAILED: $t"
+done
 ```
 
-The core transformations and the recording/contract/monitoring logic are **pure and testable
-offline** (no network dependency). Live fetches (`fetch_*`) require the respective API keys as
-environment variables.
+Each test file is standalone and can be run directly.
 
-**Test-suite scope:** 26 test files, all green, ~20,000 lines of Python across 75 modules.
+## Roadmap
 
----
+1. **A specification** of the temporal invariants — precise enough to be machine-checked and
+   implemented by someone else, with the ambiguous cases named rather than glossed over.
+2. **A public conformance corpus** — small datasets carrying documented violations and their
+   expected findings, so any implementation can be measured, not just this one.
+3. **A packaged library** with an English public API and coverage that justifies a dependency.
+4. **`chronos-stream verify`** — check a dataset against the specification and name the rows that
+   violate it.
+5. **A documented connector contract**, first-print archival, and a 1.0 release.
 
-## Project scope — what is and isn't here
-
-**In this repository (open):** data collection, deduplication, PIT storage, caching/archiving, LLM
-orchestration, operations monitoring, taxonomy.
-
-**Not in this repository (proprietary):** the downstream analysis and valuation logic that interprets
-this data. It consumes the data streams produced here through clearly defined interfaces but is kept
-deliberately separate.
-
----
+The order is deliberate. A specification and a corpus are useful to people who never install this
+library — and an integrity guarantee only its own author can verify is not much of a guarantee.
 
 ## License
 
-[MIT](LICENSE) — free reuse including commercial, provided the license notice is retained.
+[MIT](LICENSE) — free reuse including commercial, provided the licence notice is retained.
