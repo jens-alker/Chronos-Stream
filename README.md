@@ -131,6 +131,12 @@ Each test file is standalone and can be run directly.
 The order is deliberate. A specification and a corpus are useful to people who never install this
 library — and an integrity guarantee only its own author can verify is not much of a guarantee.
 
+## Contributing and security
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md), which states up front what a
+single-maintainer project can and cannot promise about review. Security issues go to
+[SECURITY.md](SECURITY.md), privately rather than to the issue tracker.
+
 ## License
 
 [MIT](LICENSE) — free reuse including commercial, provided the licence notice is retained.
