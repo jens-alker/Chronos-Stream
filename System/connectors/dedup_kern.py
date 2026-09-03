@@ -11,7 +11,7 @@ DEFINITION (modell-agnostisch; nur die Schwelle ist ein pro-Embed-Modell kalibri
   - **Blocking nach source_type** — nur Dokumente DERSELBEN Reifegrad-Sprosse (paper/patent/funding/news)
     werden verglichen. **KONZEPT-KRITISCH:** ein Patent darf NIE als Dup des Papers markiert werden, auf dem
     es beruht — sonst kollabiert die Kette Paper→Patent→Funding→News, die das System gerade DETEKTIERT
-    (`CLAUDE.md`: „Die Kette … IST das System"). Die frühere Cloud-Dedup OHNE source_type-Block war ein
+    (die Kette IST das System). Die frühere Cloud-Dedup OHNE source_type-Block war ein
     latenter Bug, kein Vorteil.
   - **Zeitfenster** ±`fenster_tage` um `published_at` — fängt Republikationen 2–3 Tage später, meidet O(N²).
   - **Best-Match** — unter den Kandidaten die HÖCHSTE Kosinus-Ähnlichkeit; ist sie ≥ `schwelle` → Near-Dup

@@ -8,7 +8,7 @@ Diese Quelle war der bisher fehlende Baustein (arXiv egress-blockiert); EPO ist 
 
 1. **Frühsignal-Zählung (Anker, KEIN LLM, keine Meinung):** IPC-Klasse × pd-Fenster ->
    `@total-result-count`. Reines Zählen hart datierter, klassifizierter Anmeldungen je Klasse je
-   Zeitfenster -> Beschleunigung (`Kontext/Anker-Design_Cashflow-Decomposition-vs-Fruehsignal.md`,
+   Zeitfenster -> Beschleunigung (Anker-Design: Cashflow-Decomposition vs. Frühsignal —
    die FRÜHE Sprosse gegen die DCF-Decomposition, Hälfte 2). Das umgeht die Vintage-Wand (die betraf nur die
    *semantische* Extraktion, nicht das Zählen datierter Anmeldungen).
 2. **Semantische Pipeline (Verortung Modul 1/2/5, KEINE Insel):** biblio -> `facts` (Titel als Text,
@@ -133,7 +133,7 @@ def zaehle(search_json):
     ein echtes „0 Patente" liefert `@total-result-count="0"` (parst sauber zu 0); FEHLT die Zähl-
     Struktur (Fault-/Fehler-Envelope, unerwartetes Schema), wird NICHT still 0 gemeldet, sondern
     laut geworfen — sonst würde ein transienter 403/429/Fault als fabrizierte Deceleration in genau
-    das alpha-tragende Frühsignal fließen (die 404->stiller-Mock-Lehre, CLAUDE.md).
+    das signaltragende Frühsignal fließen (Lehre aus dem 404->stiller-Mock-Fall).
 
     DAS ist das Zähl-Primitiv der Frühsignal-Mechanik: die Gesamttreffer je Klasse×Fenster, unabhängig
     davon, wie viele Publikationsreferenzen `Range` zurückgibt."""

@@ -1,7 +1,7 @@
 """
 betrieb_aufsicht.py — Schicht S: die PROZESS-UNABHÄNGIGE Laufzeit-Aufsicht (v0-Kern).
 
-Feinkonzept `Feinkonzept_Querschnitt_Betrieb-und-Kontrolle_v1.md` · Konzept_v13 §11 (S3/S6/S7/S8/S9/S10).
+Betriebs- und Kontroll-Schicht (Aufgaben S3/S6/S7/S8/S9/S10).
 Der Wächter ist ein SEPARATER Prozess (kein Hook in scraper.py/watchdog_batch.sh); er LIEST von außen
 (Heartbeats, DB-Frische, rohe HTTP-Codes) und schreibt in eine EIGENE, physisch getrennte ops-DB —
 damit er den Ausfall der überwachten Speicher/Prozesse ÜBERLEBT und melden kann.

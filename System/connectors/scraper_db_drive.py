@@ -1,7 +1,7 @@
 """
-scraper_db_drive.py — scraper.db → Google-Drive-Sync (Konzept B, dünner Wrapper über `db_drive`).
+scraper_db_drive.py — scraper.db → Google-Drive-Sync (dünner Wrapper über `db_drive`).
 
-Konzept B (`Kontext/Konzept_B_ScraperDB-Drive-Sync.md` §8): die 70k-Doc-`scraper.db` (Signal-Rohquelle)
+Die `scraper.db` (Signal-Rohquelle)
 lebt zu Hause; dieser Connector hält eine **automatische, verifizierte, reclaim-feste** Drive-Kopie —
 Richtung home → Drive → cloud, **Home ist und bleibt die Wahrheit**, die Cloud restauriert read-only.
 

@@ -1,10 +1,10 @@
 """
 db_drive.py — der GETEILTE generische Einzeldatei-SQLite→Drive-Sync (gz, versioniert, Read-back-verifiziert).
 
-Konzept B (`Kontext/Konzept_B_ScraperDB-Drive-Sync.md` §8, Fable-B8 — KEINE INSEL): `sammel_forward.
+Eine einzige Transport-Mechanik, keine zweite Definition: `sammel_forward.
 sync_zu_drive`/`restore_von_drive` waren bereits der Single-SQLite→Drive-Sync MIT Read-back-Verifikation +
 Retention 2 + fail-loud. Dieser Connector zieht genau diese Mechanik als EINE Definition heraus;
-`sammel_forward` (Sammel-DB, `makro_sammel_cloud`) UND `scraper_db_drive` (scraper.db, Konzept B) sind
+`sammel_forward` (Sammel-DB, `makro_sammel_cloud`) UND `scraper_db_drive` (scraper.db) sind
 dünne Wrapper darüber — keine zweite/dritte Storage-Definition. Delegiert an `gdrive.py` (OAuth-REST);
 `_gdrive` ist injizierbar (Tests: Fake in-memory — der ECHTE Drive-Round-Trip bleibt home/creds-gated,
 Schein-Test-Riegel; `gdrive.py` selbst ist live verifiziert).

@@ -16,11 +16,16 @@ Abbildung (Form D -> kapital_roh, Modul 11):
   t_ingest = Abrufzeit (Wissenszeit).  Nur Standardbibliothek.
 """
 import json
+import os
 import subprocess
 from urllib.parse import urlencode
 
 _EFTS = "https://efts.sec.gov/LATEST/search-index"      # Full-Text-Search (GET, Query-Parameter)
-_UA = "Makro-Thesen-Fabrik jacand@protonmail.com"       # EDGAR verlangt Kontakt-UA
+
+#: SEC EDGAR requires a User-Agent carrying a real contact address (fair-access policy).
+#: It is read from the environment rather than hard-coded: a contact address baked into a
+#: public repository is published to everyone, not just to the SEC.
+_UA = os.environ.get("CHRONOS_CONTACT_UA", "Chronos-Stream jens@alker.org")
 
 
 def _fts_url(query, seit, bis=None, forms="D"):

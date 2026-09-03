@@ -10,7 +10,9 @@
 # (Fortschritt eingefroren) -> kill+restart; (4) Fortschritt committen+pushen.
 # Gestartet vom stündlichen Self-Trigger (überlebt so einen Container-Reclaim). Idempotent.
 set -u
-REPO=/home/user/Alpha-Analyzer
+# Wurzel des Checkouts: aus der Lage dieses Skripts abgeleitet, per CHRONOS_REPO überschreibbar.
+# Ein fest verdrahteter absoluter Pfad bindet das Skript an EINE Maschine und leckt sie nach aussen.
+REPO=${CHRONOS_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 PERS="$REPO/System/integration/retro_kat_map_persistent.json"
 LOG="$REPO/System/integration/.watchdog.log"     # gitignored
 BATCHLOG="$REPO/System/integration/.batch.log"   # gitignored (Klassifikation)

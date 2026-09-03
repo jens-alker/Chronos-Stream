@@ -16,7 +16,12 @@ ein dokumentiertes Skelett (braucht Netzzugang zu data.sec.gov / XBRL). Nur Stan
 Abbildung: t_event = Segment-Periodenende (reales Ereignis), t_disclosed = filingDate (Offenlegung),
 t_ingest = Abrufzeit. kat_id über die geteilte Taxonomie (segment_map: (CIK, Segment) -> Knoten).
 """
-_UA = "Makro-Thesen-Fabrik jacand@protonmail.com"       # EDGAR verlangt Kontakt-UA
+import os
+
+#: SEC EDGAR requires a User-Agent carrying a real contact address (fair-access policy).
+#: It is read from the environment rather than hard-coded: a contact address baked into a
+#: public repository is published to everyone, not just to the SEC.
+_UA = os.environ.get("CHRONOS_CONTACT_UA", "Chronos-Stream jens@alker.org")
 
 # Default-SIC-Whitelist für die Trafo/Grid-Kette (Präfix-Match erlaubt). Erweiterbar je Kette.
 # 3612 Power/Distribution Transformers · 3613 Switchgear · 362x Motors/Generators ·

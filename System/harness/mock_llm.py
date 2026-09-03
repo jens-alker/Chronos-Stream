@@ -3,8 +3,8 @@ mock_llm.py — deterministisches Mock-LLM für den Harness.
 
 Kein externer Aufruf, keine Kosten, reproduzierbar (gleicher Input -> gleicher
 Output). Ersetzt beim Testen das lokale/Frontier-Modell, damit Testiterationen
-LLM-frei, deterministisch und gratis laufen (Feinkonzept_SchichtS §3.0 /
-Kontext/Zielfunktion-und-Engpaesse_v1.md).
+LLM-frei, deterministisch und gratis laufen (Maschinenzeit ist frei, die
+Stunden des Entwicklers sind es nicht).
 
 Später wird hier das echte (freie, ensemblierte) Extraktions-LLM eingehängt
 (Modul 2d); die Schnittstelle bleibt gleich.

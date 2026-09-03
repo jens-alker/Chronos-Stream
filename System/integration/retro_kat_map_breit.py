@@ -30,7 +30,7 @@ Der Live-Batch ist gated + **gecacht** (`.cache_klassifikation.json`, gitignored
 + **stratifiziert gedeckelt** (`n_aktiv`/`n_delistet` steuern Wall-Clock). Reiner Kern (Lookup/Assemblierung)
 injizierbar/offline getestet. Nur Standardbibliothek + curl-Konnektor.
 
-⚠️ **QS-Verdikt (doppelt, 2026-07-23 — `Kontext/QS/Erstbewertung_Breite-Kat-Map_2026-07-23.md`):** Diese Map
+⚠️ **QS-Verdikt (doppelt geprüft, 2026-07-23):** Diese Map
 in ihrer HYBRID-Form + über die aktuelle Konsum-Naht **hebt den survivorship-Blocker NOCH NICHT** — drei
 zusammenwirkende Gründe: (B1) `retro_voll_run._outcome_map` hartkodiert `delisted=False` → der Flag erreicht
 die Kohorte nie; (B2) Hybrid stellt survivorship-freie breite Kategorien gegen aktiv-only kuratierte (Trafo/
